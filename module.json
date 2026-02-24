@@ -36,5 +36,5 @@
   },
   "url": "https://example.invalid/pf2e-encounter-adjuster",
   "manifest": "https://raw.githubusercontent.com/Kazgul1987/PF2e-Encounter-Adjuster/main/module.json",
-  "https://github.com/Kazgul1987/PF2e-Encounter-Adjuster/releases/latest/download/module.zip"
+  "download": "https://github.com/Kazgul1987/PF2e-Encounter-Adjuster/releases/latest/download/module.zip"
 }
