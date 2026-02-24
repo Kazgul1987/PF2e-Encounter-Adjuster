@@ -1,0 +1,11 @@
+{
+  "PF2E_EA.Settings.Debug": "Debug-Logging aktivieren",
+  "PF2E_EA.Settings.Compendiums": "Compendium-Packs (kommagetrennt)",
+  "PF2E_EA.Settings.LinkedMode": "Token standardmäßig verknüpft",
+  "PF2E_EA.Settings.AllowStacking": "Stacking standardmäßig erlauben",
+  "PF2E_EA.Settings.MaxTokens": "Maximale Token pro Populate",
+  "PF2E_EA.Menu.ExportScenes": "Szenenliste exportieren",
+  "PF2E_EA.Menu.ImportEncounter": "Encounter JSON importieren",
+  "PF2E_EA.Menu.RebuildIndex": "Monster-Index neu aufbauen",
+  "PF2E_EA.Menu.OpenApp": "Encounter Adjuster öffnen"
+}

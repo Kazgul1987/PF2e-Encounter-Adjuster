@@ -1,0 +1,43 @@
+.pf2e-encounter-adjuster {
+  min-width: 720px;
+}
+
+.pf2e-encounter-adjuster .toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.pf2e-encounter-adjuster .status-pill {
+  border-radius: 999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.pf2e-encounter-adjuster .status-pill.resolved {
+  background: #1f6f3f;
+  color: #fff;
+}
+
+.pf2e-encounter-adjuster .status-pill.unresolved {
+  background: #912f2f;
+  color: #fff;
+}
+
+.pf2e-encounter-adjuster .placements {
+  max-height: 350px;
+  overflow: auto;
+  border: 1px solid var(--color-border-light-tertiary);
+}
+
+.pf2e-encounter-adjuster .placements table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pf2e-encounter-adjuster .placements th,
+.pf2e-encounter-adjuster .placements td {
+  padding: 0.4rem;
+  border-bottom: 1px solid var(--color-border-light-tertiary);
+}
