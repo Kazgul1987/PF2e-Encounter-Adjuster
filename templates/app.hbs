@@ -24,7 +24,7 @@
   <div class="placements">
     <table>
       <thead>
-        <tr><th>Monster</th><th>Menge</th><th>Status</th><th>Area</th></tr>
+        <tr><th>Monster</th><th>Menge</th><th>Status</th><th>Area</th><th>Region</th></tr>
       </thead>
       <tbody>
         {{#if data.scenes.length}}
@@ -34,6 +34,13 @@
               <td>{{quantity}}</td>
               <td><span class="status-pill unresolved">Ungeprüft</span></td>
               <td>{{areaLabel}}</td>
+              <td>
+                {{#if hasRegion}}
+                  <span class="region-label {{#if unresolvedRegion}}unresolved{{/if}}" title="{{#if unresolvedRegion}}{{unresolvedRegionTooltip}}{{/if}}">Region: {{regionLabel}}</span>
+                {{else}}
+                  -
+                {{/if}}
+              </td>
             </tr>
           {{/each}}
         {{/if}}

@@ -107,8 +107,21 @@ function validateEncounterImport(input) {
           if (placement.quantity < 1 || placement.quantity > 999) {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].quantity`, message: "quantity out of allowed range 1..999." });
           }
-          if (!isObj(placement.area) || !("rect" in placement.area) && !("points" in placement.area)) {
-            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].area`, message: "area requires rect or points." });
+          const hasArea = isObj(placement.area) && ("rect" in placement.area || "points" in placement.area);
+          const hasAreaRefObject = isObj(placement.areaRef);
+          const hasAreaRefString = typeof placement.areaRef === "string" && placement.areaRef.trim().length > 0;
+          if (!hasArea && !hasAreaRefObject && !hasAreaRefString) {
+            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}]`, message: "placement requires area or areaRef." });
+          }
+          if (hasAreaRefObject) {
+            const areaRefObj = placement.areaRef;
+            if (areaRefObj.type !== "region") {
+              errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef.type`, message: "areaRef.type must be 'region'." });
+            }
+            const hasRegionReference = typeof areaRefObj.regionId === "string" || typeof areaRefObj.regionName === "string" || typeof areaRefObj.roomLabel === "string";
+            if (!hasRegionReference) {
+              errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef`, message: "areaRef requires regionId, regionName or roomLabel." });
+            }
           }
           if (typeof placement.monster.name !== "string") {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].monster.name`, message: "monster.name must be string." });
@@ -135,6 +148,148 @@ async function setMonsterIndex(data) {
   await game.settings.set(MODULE_ID, SETTINGS_KEYS.monsterIndex, data);
 }
 
+// src/foundry/regions.ts
+function normalizeRegionText(value) {
+  return value.toLowerCase().trim().replace(/\s+/g, " ");
+}
+function extractRoomCode(value) {
+  if (!value) return null;
+  const normalized = normalizeRegionText(value).replace(/^[\s.]+|[\s.]+$/g, "");
+  const match = normalized.match(/^([a-z]+[0-9]+)\b/);
+  return match?.[1] ?? null;
+}
+function getSceneRegions(scene) {
+  const direct = scene?.regions;
+  if (direct && typeof direct[Symbol.iterator] === "function") {
+    return Array.from(direct);
+  }
+  const embedded = scene?.getEmbeddedCollection?.("Region");
+  if (embedded && typeof embedded[Symbol.iterator] === "function") {
+    return Array.from(embedded);
+  }
+  return [];
+}
+function resolveRegion(scene, areaRef) {
+  if (!areaRef || areaRef.type !== "region") return null;
+  const regions = getSceneRegions(scene);
+  if (areaRef.regionId) {
+    const byId = regions.find((region) => String(region.id) === String(areaRef.regionId));
+    if (byId) return byId;
+  }
+  const label = areaRef.roomLabel || areaRef.regionName;
+  if (!label) return null;
+  const codeWanted = extractRoomCode(label);
+  if (codeWanted) {
+    const byCode = regions.find((region) => extractRoomCode(String(region.name ?? "")) === codeWanted);
+    if (byCode) return byCode;
+  }
+  const normalizedLabel = normalizeRegionText(label);
+  return regions.find((region) => normalizeRegionText(String(region.name ?? "")).startsWith(normalizedLabel)) ?? null;
+}
+function getGridSize(scene) {
+  return Number(scene?.grid?.size ?? scene?.dimensions?.size ?? 0);
+}
+function regionBounds(region) {
+  const bounds = region?.bounds;
+  if (bounds && Number.isFinite(bounds.x) && Number.isFinite(bounds.y) && Number.isFinite(bounds.width ?? bounds.w) && Number.isFinite(bounds.height ?? bounds.h)) {
+    return {
+      x: Number(bounds.x),
+      y: Number(bounds.y),
+      w: Number(bounds.width ?? bounds.w),
+      h: Number(bounds.height ?? bounds.h)
+    };
+  }
+  const shapeData = Array.isArray(region?.shapes) ? region.shapes : Array.isArray(region?._source?.shapes) ? region._source.shapes : [];
+  if (!shapeData.length) return null;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const shape of shapeData) {
+    const x = Number(shape.x ?? 0);
+    const y = Number(shape.y ?? 0);
+    if (Array.isArray(shape.points) && shape.points.length >= 2) {
+      for (let i = 0; i < shape.points.length; i += 2) {
+        const px = x + Number(shape.points[i] ?? 0);
+        const py = y + Number(shape.points[i + 1] ?? 0);
+        minX = Math.min(minX, px);
+        minY = Math.min(minY, py);
+        maxX = Math.max(maxX, px);
+        maxY = Math.max(maxY, py);
+      }
+    } else {
+      const w = Number(shape.width ?? shape.w ?? 0);
+      const h = Number(shape.height ?? shape.h ?? 0);
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x + w);
+      maxY = Math.max(maxY, y + h);
+    }
+  }
+  if (!Number.isFinite(minX) || !Number.isFinite(minY) || !Number.isFinite(maxX) || !Number.isFinite(maxY)) return null;
+  return { x: minX, y: minY, w: Math.max(0, maxX - minX), h: Math.max(0, maxY - minY) };
+}
+function pointInPolygon(px, py, points) {
+  let inside = false;
+  for (let i = 0, j = points.length - 2; i < points.length; i += 2) {
+    const xi = points[i];
+    const yi = points[i + 1];
+    const xj = points[j];
+    const yj = points[j + 1];
+    const intersect = yi > py !== yj > py && px < (xj - xi) * (py - yi) / (yj - yi || Number.EPSILON) + xi;
+    if (intersect) inside = !inside;
+    j = i;
+  }
+  return inside;
+}
+function shapeContainsPoint(shape, px, py) {
+  const type = String(shape.type ?? shape.shape ?? "rectangle").toLowerCase();
+  const x = Number(shape.x ?? 0);
+  const y = Number(shape.y ?? 0);
+  if (Array.isArray(shape.points) && shape.points.length >= 6) {
+    const worldPoints = shape.points.map((v, idx) => Number(v) + (idx % 2 === 0 ? x : y));
+    return pointInPolygon(px, py, worldPoints);
+  }
+  const w = Number(shape.width ?? shape.w ?? 0);
+  const h = Number(shape.height ?? shape.h ?? 0);
+  if (type.includes("ellipse")) {
+    if (!w || !h) return false;
+    const rx = w / 2;
+    const ry = h / 2;
+    const cx = x + rx;
+    const cy = y + ry;
+    const nx = (px - cx) / rx;
+    const ny = (py - cy) / ry;
+    return nx * nx + ny * ny <= 1;
+  }
+  return px >= x && py >= y && px <= x + w && py <= y + h;
+}
+function regionContainsPoint(region, px, py) {
+  if (typeof region?.containsPoint === "function") {
+    return Boolean(region.containsPoint({ x: px, y: py }));
+  }
+  const shapeData = Array.isArray(region?.shapes) ? region.shapes : Array.isArray(region?._source?.shapes) ? region._source.shapes : [];
+  return shapeData.some((shape) => shapeContainsPoint(shape, px, py));
+}
+function regionToGridCells(scene, region) {
+  const gridSize = getGridSize(scene);
+  const bounds = regionBounds(region);
+  if (!gridSize || !bounds) return [];
+  const minX = Math.floor(bounds.x / gridSize);
+  const minY = Math.floor(bounds.y / gridSize);
+  const maxX = Math.ceil((bounds.x + bounds.w) / gridSize);
+  const maxY = Math.ceil((bounds.y + bounds.h) / gridSize);
+  const cells = [];
+  for (let y = minY; y < maxY; y++) {
+    for (let x = minX; x < maxX; x++) {
+      const px = x * gridSize + gridSize / 2;
+      const py = y * gridSize + gridSize / 2;
+      if (regionContainsPoint(region, px, py)) cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
 // src/foundry/logger.ts
 function isDebugEnabled() {
   return Boolean(game.settings.get(MODULE_ID, SETTINGS_KEYS.debug));
@@ -151,6 +306,16 @@ function logError(message, err) {
 }
 
 // src/foundry/io.ts
+function regionBounds2(region) {
+  const bounds = region?.bounds;
+  if (!bounds) return null;
+  const width = Number(bounds.width ?? bounds.w);
+  const height = Number(bounds.height ?? bounds.h);
+  if (!Number.isFinite(bounds.x) || !Number.isFinite(bounds.y) || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return null;
+  }
+  return { x: Number(bounds.x), y: Number(bounds.y), w: width, h: height };
+}
 function buildScenesExport() {
   return {
     foundryVersion: game.version,
@@ -165,7 +330,15 @@ function buildScenesExport() {
       width: scene.width,
       height: scene.height,
       background: scene.background?.src ?? null,
-      notes: scene?.flags?.notes ?? null
+      notes: scene?.flags?.notes ?? null,
+      regions: getSceneRegions(scene).map((region) => {
+        const bounds = regionBounds2(region);
+        return {
+          id: String(region.id),
+          name: String(region.name ?? ""),
+          ...bounds ? { bounds } : {}
+        };
+      })
     }))
   };
 }
@@ -179,6 +352,21 @@ async function exportScenesJson(copyToClipboard = false) {
     await navigator.clipboard.writeText(json);
   }
   logInfo("Scene export created.");
+}
+function summarizeAreaRefs(data) {
+  let byRegionId = 0;
+  let byLabel = 0;
+  for (const scene of data.scenes ?? []) {
+    for (const encounter of scene.encounters ?? []) {
+      for (const placement of encounter.placements ?? []) {
+        const areaRef = placement?.areaRef;
+        if (!areaRef || areaRef.type !== "region") continue;
+        if (areaRef.regionId) byRegionId++;
+        if (areaRef.roomLabel || areaRef.regionName) byLabel++;
+      }
+    }
+  }
+  return { byRegionId, byLabel };
 }
 async function importEncounterJson(raw) {
   let parsed;
@@ -200,8 +388,12 @@ async function importEncounterJson(raw) {
     return;
   }
   await setEncounterData(validation.data);
+  const summary = summarizeAreaRefs(validation.data);
   logInfo("Encounter data imported.");
   ui.notifications.info("Encounter JSON erfolgreich importiert.");
+  if (summary.byRegionId || summary.byLabel) {
+    ui.notifications.info(`Region-Referenzen erkannt: ${summary.byRegionId} per regionId, ${summary.byLabel} per roomLabel/regionName.`);
+  }
 }
 async function promptImportDialog() {
   const content = await renderTemplate("modules/pf2e-encounter-adjuster/templates/import-dialog.hbs", {});
@@ -348,14 +540,14 @@ var GridSelectionManager = class _GridSelectionManager {
 
 // src/foundry/spawn.ts
 function cellsFromArea(area) {
-  if (area.rect) {
+  if (area?.rect) {
     const cells = [];
     for (let y = area.rect.y; y < area.rect.y + area.rect.h; y++) {
       for (let x = area.rect.x; x < area.rect.x + area.rect.w; x++) cells.push({ x, y });
     }
     return cells;
   }
-  if (Array.isArray(area.points)) return area.points;
+  if (Array.isArray(area?.points)) return area.points;
   return [];
 }
 function shuffle(arr) {
@@ -366,18 +558,42 @@ function shuffle(arr) {
   }
   return clone;
 }
+function areaRefLabel(areaRef) {
+  if (!areaRef) return "";
+  if (areaRef.type === "region") return areaRef.roomLabel || areaRef.regionName || areaRef.regionId || "region";
+  return String(areaRef);
+}
+function getPlacementCells(scene, placement, selectedCells) {
+  if (selectedCells.length) {
+    return { cells: selectedCells, unresolvedRegion: false };
+  }
+  if (placement.area) {
+    return { cells: cellsFromArea(placement.area), unresolvedRegion: false };
+  }
+  if (placement.areaRef?.type === "region") {
+    const region = resolveRegion(scene, placement.areaRef);
+    if (!region) return { cells: [], unresolvedRegion: true };
+    return { cells: regionToGridCells(scene, region), unresolvedRegion: false };
+  }
+  return { cells: [], unresolvedRegion: false };
+}
 async function previewPopulate(scene, placements, selectedCells) {
   const warnings = [];
   const unresolved = [];
+  const unresolvedRegions = [];
   let total = 0;
   for (const p of placements) {
     const res = await resolveMonster(p.monster);
-    if (res.status !== "resolved") unresolved.push(p.monster.name);
+    if (res.status !== "resolved") unresolved.push(p.areaRef ? `${p.monster.name} [${areaRefLabel(p.areaRef)}]` : p.monster.name);
+    if (!selectedCells.length && p.areaRef?.type === "region" && !resolveRegion(scene, p.areaRef)) {
+      unresolvedRegions.push(areaRefLabel(p.areaRef));
+    }
     total += p.quantity;
   }
   const max = Number(game.settings.get(MODULE_ID, SETTINGS_KEYS.maxTokens));
   if (total > max) warnings.push(`Token-Limit \xFCberschritten (${total}/${max}).`);
-  if (unresolved.length) warnings.push(`Unresolved: ${unresolved.join(", ")}`);
+  if (unresolved.length) warnings.push(`Unresolved Monster: ${unresolved.join(", ")}`);
+  if (unresolvedRegions.length) warnings.push(`Unresolved Regions: ${unresolvedRegions.join(", ")}`);
   if (selectedCells.length && total > selectedCells.length) warnings.push("Mehr Tokens als ausgew\xE4hlte Squares.");
   return warnings;
 }
@@ -394,12 +610,21 @@ async function populateScene(scene, placements, selectedCells) {
     if (resolved.status !== "resolved" || !resolved.entry) continue;
     const actor = await fromUuid(resolved.entry.uuid);
     if (!actor) continue;
-    const areaCells = selectedCells.length ? selectedCells : cellsFromArea(placement.area);
-    const randomized = placement.spawnRules?.randomizeWithinArea ? shuffle(areaCells) : [...areaCells];
+    const { cells: rawCells, unresolvedRegion } = getPlacementCells(scene, placement, selectedCells);
+    if (unresolvedRegion) {
+      ui.notifications.warn(`Region f\xFCr Raumlabel ${areaRefLabel(placement.areaRef)} nicht gefunden.`);
+      continue;
+    }
+    if (!rawCells.length) {
+      ui.notifications.warn(`Keine Grid-Zellen f\xFCr Placement ${placement.monster.name} (${areaRefLabel(placement.areaRef)}).`);
+      continue;
+    }
+    const randomized = placement.spawnRules?.randomizeWithinArea ? shuffle(rawCells) : [...rawCells];
     const allowStacking = placement.spawnRules?.allowStacking ?? defaultAllowStacking;
     const available = allowStacking ? randomized : randomized.slice(0, placement.quantity);
     if (!allowStacking && placement.quantity > available.length) {
-      throw new Error(`Not enough cells for placement ${placement.monster.name}.`);
+      const areaSuffix = areaRefLabel(placement.areaRef) ? ` [${areaRefLabel(placement.areaRef)}]` : "";
+      throw new Error(`Not enough cells for placement ${placement.monster.name}${areaSuffix}.`);
     }
     for (let i = 0; i < placement.quantity; i++) {
       const cell = allowStacking ? randomized[i % Math.max(1, randomized.length)] : available[i];
@@ -432,6 +657,13 @@ async function populateScene(scene, placements, selectedCells) {
 
 // src/ui/app.ts
 var BaseApp = foundry?.applications?.api?.ApplicationV2 ?? Application;
+function areaRefDisplay(areaRef) {
+  if (!areaRef) return "";
+  if (areaRef.type === "region") {
+    return areaRef.roomLabel || areaRef.regionName || areaRef.regionId || "Region";
+  }
+  return String(areaRef);
+}
 var EncounterAdjusterApp = class extends BaseApp {
   static DEFAULT_OPTIONS = {
     id: "pf2e-encounter-adjuster-app",
@@ -442,12 +674,30 @@ var EncounterAdjusterApp = class extends BaseApp {
   async _prepareContext() {
     const data = getStoredEncounterData();
     const scenes = (data.scenes ?? []).map((s, idx) => ({ idx, name: s.sceneRef?.name || s.sceneRef?.sceneId || `Szene ${idx + 1}` }));
+    const selectedScene = data.scenes?.[0];
+    const selectedEncounter = selectedScene?.encounters?.[0];
+    const sceneId = selectedScene?.sceneRef?.sceneId;
+    const sceneDoc = game.scenes.get(sceneId) ?? canvas.scene;
+    const placementRows = (selectedEncounter?.placements ?? []).map((placement) => {
+      const isRegion = placement.areaRef?.type === "region";
+      const regionLabel = isRegion ? areaRefDisplay(placement.areaRef) : "";
+      const unresolvedRegion = isRegion && !resolveRegion(sceneDoc, placement.areaRef);
+      return {
+        ...placement,
+        areaLabel: placement.area?.rect ? "Rect" : placement.area?.points ? "Polygon" : "-",
+        regionLabel,
+        hasRegion: isRegion,
+        unresolvedRegion,
+        unresolvedRegionTooltip: `Region f\xFCr Raumlabel ${regionLabel} nicht gefunden`
+      };
+    });
     const activeSceneId = canvas?.scene?.id ?? "";
     return {
       scenes,
       data,
       activeSceneId,
-      selectedCells: GridSelectionManager.instance.getCells().length
+      selectedCells: GridSelectionManager.instance.getCells().length,
+      placementRows
     };
   }
   async _renderHTML(context) {

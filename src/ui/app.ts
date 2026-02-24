@@ -2,8 +2,17 @@ import { getStoredEncounterData } from "../foundry/io";
 import { GridSelectionManager } from "../foundry/grid-selection";
 import { populateScene, previewPopulate } from "../foundry/spawn";
 import { resolveMonster } from "../data/indexer";
+import { resolveRegion } from "../foundry/regions";
 
 const BaseApp: any = foundry?.applications?.api?.ApplicationV2 ?? Application;
+
+function areaRefDisplay(areaRef: any): string {
+  if (!areaRef) return "";
+  if (areaRef.type === "region") {
+    return areaRef.roomLabel || areaRef.regionName || areaRef.regionId || "Region";
+  }
+  return String(areaRef);
+}
 
 export class EncounterAdjusterApp extends BaseApp {
   declare render: (force?: boolean) => unknown;
@@ -19,12 +28,23 @@ export class EncounterAdjusterApp extends BaseApp {
     const scenes = (data.scenes ?? []).map((s: any, idx: number) => ({ idx, name: s.sceneRef?.name || s.sceneRef?.sceneId || `Szene ${idx + 1}` }));
     const selectedScene = data.scenes?.[0];
     const selectedEncounter = selectedScene?.encounters?.[0];
-    const placementRows = (selectedEncounter?.placements ?? []).map((placement: any) => ({
-      ...placement,
-      areaLabel: placement.areaRef
-        ? `${placement.areaRef} (${placement.area?.rect ? "Rect" : "Polygon"})`
-        : (placement.area?.rect ? "Rect" : "Polygon")
-    }));
+    const sceneId = selectedScene?.sceneRef?.sceneId;
+    const sceneDoc = game.scenes.get(sceneId) ?? canvas.scene;
+
+    const placementRows = (selectedEncounter?.placements ?? []).map((placement: any) => {
+      const isRegion = placement.areaRef?.type === "region";
+      const regionLabel = isRegion ? areaRefDisplay(placement.areaRef) : "";
+      const unresolvedRegion = isRegion && !resolveRegion(sceneDoc, placement.areaRef);
+      return {
+        ...placement,
+        areaLabel: placement.area?.rect ? "Rect" : placement.area?.points ? "Polygon" : "-",
+        regionLabel,
+        hasRegion: isRegion,
+        unresolvedRegion,
+        unresolvedRegionTooltip: `Region für Raumlabel ${regionLabel} nicht gefunden`
+      };
+    });
+
     const activeSceneId = canvas?.scene?.id ?? "";
     return {
       scenes,
