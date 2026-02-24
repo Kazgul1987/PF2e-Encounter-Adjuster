@@ -1,0 +1,1 @@
+# PF2e-Encounter-Adjuster
