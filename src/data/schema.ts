@@ -3,8 +3,15 @@ export type PlacementArea =
   | { rect: { x: number; y: number; w: number; h: number } }
   | { points: Array<{ x: number; y: number }> };
 
+export interface PlacementAreaRef {
+  type: "region";
+  regionId?: string;
+  regionName?: string;
+  roomLabel?: string;
+}
+
 export interface Placement {
-  areaRef?: string;
+  areaRef?: PlacementAreaRef | string;
   monster: {
     uuid?: string;
     slug?: string;
@@ -13,7 +20,7 @@ export interface Placement {
     levelHint?: number;
   };
   quantity: number;
-  area: PlacementArea;
+  area?: PlacementArea;
   tags?: string[];
   token?: {
     disposition?: number;
@@ -93,11 +100,25 @@ export function validateEncounterImport(input: unknown): { ok: true; data: Encou
           if (placement.quantity < 1 || placement.quantity > 999) {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].quantity`, message: "quantity out of allowed range 1..999." });
           }
-          if (!isObj(placement.area) || (!("rect" in placement.area) && !("points" in placement.area))) {
-            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].area`, message: "area requires rect or points." });
+          const hasArea = isObj(placement.area) && ("rect" in placement.area || "points" in placement.area);
+          const hasAreaRefObject = isObj(placement.areaRef);
+          const hasAreaRefString = typeof placement.areaRef === "string" && placement.areaRef.trim().length > 0;
+          if (!hasArea && !hasAreaRefObject && !hasAreaRefString) {
+            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}]`, message: "placement requires area or areaRef." });
           }
-          if ("areaRef" in placement && (typeof placement.areaRef !== "string" || placement.areaRef.trim().length === 0)) {
-            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef`, message: "areaRef must be a non-empty string when set." });
+
+          if (hasAreaRefObject) {
+            const areaRefObj = placement.areaRef as Record<string, unknown>;
+            if (areaRefObj.type !== "region") {
+              errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef.type`, message: "areaRef.type must be 'region'." });
+            }
+            const hasRegionReference =
+              typeof areaRefObj.regionId === "string" ||
+              typeof areaRefObj.regionName === "string" ||
+              typeof areaRefObj.roomLabel === "string";
+            if (!hasRegionReference) {
+              errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef`, message: "areaRef requires regionId, regionName or roomLabel." });
+            }
           }
           if (typeof placement.monster.name !== "string") {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].monster.name`, message: "monster.name must be string." });

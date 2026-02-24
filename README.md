@@ -4,12 +4,12 @@ Ein Foundry-Modul für **Pathfinder 2e**, das extern erzeugte Encounter-JSON-Dat
 
 ## Features
 
-- Export der Szenenliste als JSON (inkl. `sceneId`, `sceneUuid`, Grid/Dimensionen).
+- Export der Szenenliste als JSON (inkl. `sceneId`, `sceneUuid`, Grid/Dimensionen, `regions[]`).
 - Import von versionierten Encounter-Daten (`schemaVersion: 1`) via Datei oder Paste.
 - Defensive Validierung mit verständlichen Fehlermeldungen (`Pfad: Nachricht`).
 - Monster-Index aus World Actors + konfigurierbaren Compendiums.
 - Resolver-Pipeline: `uuid` → `slug(+Hints)` → Name-Matching.
-- Encounter-UI mit Preview, Populate und Grid-Auswahl-Aktivierung.
+- Encounter-UI mit Preview, Populate, Grid-Auswahl-Aktivierung und Region-Hinweisen (`areaRef`).
 - Spawn-Optionen: linked/unlinked, hidden/disposition, Stacking-Regeln, Safety-Limits.
 
 ## Installation
@@ -78,7 +78,37 @@ Ein Foundry-Modul für **Pathfinder 2e**, das extern erzeugte Encounter-JSON-Dat
 }
 ```
 
-`areaRef` ist eine optionale semantische Raumkennung (z. B. `A1` bis `Z99`) für bessere Lesbarkeit in UI, Logging und Fehlern. Die eigentliche Spawn-Geometrie bleibt weiterhin ausschließlich über `area.rect` oder `area.points` definiert.
+`placements[].areaRef` kann optional eine Scene Region referenzieren:
+
+```json
+"areaRef": {
+  "type": "region",
+  "regionId": "optional-region-document-id",
+  "regionName": "B6. Trapped Landing",
+  "roomLabel": "B6"
+}
+```
+
+Regeln:
+- Ein Placement braucht mindestens `area` (rect/points) **oder** `areaRef`.
+- Wenn beide gesetzt sind, hat `area` Vorrang (Backwards Compatibility).
+- Für Region-Matching wird zuerst `regionId` verwendet, danach `roomLabel/regionName` (Raumcode-Matching wie `B6`).
+
+
+## Region-Workflow (Foundry Scene Regions)
+
+1. GM zeichnet **Regions** auf einer Szene und benennt sie nach Raumcodes, z. B. `B6` oder `B6. Trapped Landing`.
+2. **Szenen-Export** liefert je Szene `regions[]` (mindestens `id` + `name`) an externe KI/Tools.
+3. Die KI erstellt Import-JSON mit `placements[].areaRef.roomLabel`, z. B.:
+   ```json
+   {
+     "monster": { "name": "Zombie Hound" },
+     "quantity": 2,
+     "areaRef": { "type": "region", "roomLabel": "B6" }
+   }
+   ```
+4. Beim **Populate** ohne aktive Grid-Auswahl werden Tokens automatisch in passenden Region-Zellen gespawnt.
+5. Wenn Region fehlt, markiert die UI das Placement als unresolved und Populate überspringt es mit Warnung.
 
 ## Troubleshooting
 
