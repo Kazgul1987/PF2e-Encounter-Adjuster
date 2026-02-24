@@ -17,12 +17,21 @@ export class EncounterAdjusterApp extends BaseApp {
   async _prepareContext(): Promise<any> {
     const data = getStoredEncounterData();
     const scenes = (data.scenes ?? []).map((s: any, idx: number) => ({ idx, name: s.sceneRef?.name || s.sceneRef?.sceneId || `Szene ${idx + 1}` }));
+    const selectedScene = data.scenes?.[0];
+    const selectedEncounter = selectedScene?.encounters?.[0];
+    const placementRows = (selectedEncounter?.placements ?? []).map((placement: any) => ({
+      ...placement,
+      areaLabel: placement.areaRef
+        ? `${placement.areaRef} (${placement.area?.rect ? "Rect" : "Polygon"})`
+        : (placement.area?.rect ? "Rect" : "Polygon")
+    }));
     const activeSceneId = canvas?.scene?.id ?? "";
     return {
       scenes,
       data,
       activeSceneId,
-      selectedCells: GridSelectionManager.instance.getCells().length
+      selectedCells: GridSelectionManager.instance.getCells().length,
+      placementRows
     };
   }
 

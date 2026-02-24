@@ -65,6 +65,7 @@ Ein Foundry-Modul für **Pathfinder 2e**, das extern erzeugte Encounter-JSON-Dat
                 "sourceHint": "monster-core"
               },
               "quantity": 3,
+              "areaRef": "B5",
               "area": { "rect": { "x": 12, "y": 8, "w": 4, "h": 3 } },
               "token": { "hidden": false, "disposition": -1 },
               "spawnRules": { "allowStacking": false, "randomizeWithinArea": true }
@@ -76,6 +77,8 @@ Ein Foundry-Modul für **Pathfinder 2e**, das extern erzeugte Encounter-JSON-Dat
   ]
 }
 ```
+
+`areaRef` ist eine optionale semantische Raumkennung (z. B. `A1` bis `Z99`) für bessere Lesbarkeit in UI, Logging und Fehlern. Die eigentliche Spawn-Geometrie bleibt weiterhin ausschließlich über `area.rect` oder `area.points` definiert.
 
 ## Troubleshooting
 
