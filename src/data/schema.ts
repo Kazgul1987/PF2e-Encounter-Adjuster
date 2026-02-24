@@ -4,6 +4,7 @@ export type PlacementArea =
   | { points: Array<{ x: number; y: number }> };
 
 export interface Placement {
+  areaRef?: string;
   monster: {
     uuid?: string;
     slug?: string;
@@ -94,6 +95,9 @@ export function validateEncounterImport(input: unknown): { ok: true; data: Encou
           }
           if (!isObj(placement.area) || (!("rect" in placement.area) && !("points" in placement.area))) {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].area`, message: "area requires rect or points." });
+          }
+          if ("areaRef" in placement && (typeof placement.areaRef !== "string" || placement.areaRef.trim().length === 0)) {
+            errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].areaRef`, message: "areaRef must be a non-empty string when set." });
           }
           if (typeof placement.monster.name !== "string") {
             errors.push({ path: `scenes[${sIdx}].encounters[${eIdx}].placements[${pIdx}].monster.name`, message: "monster.name must be string." });

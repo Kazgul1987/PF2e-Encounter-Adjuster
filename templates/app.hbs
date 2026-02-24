@@ -28,12 +28,12 @@
       </thead>
       <tbody>
         {{#if data.scenes.length}}
-          {{#each data.scenes.[0].encounters.[0].placements}}
+          {{#each placementRows}}
             <tr>
               <td>{{monster.name}}</td>
               <td>{{quantity}}</td>
               <td><span class="status-pill unresolved">Ungeprüft</span></td>
-              <td>{{#if area.rect}}Rect{{else}}Polygon{{/if}}</td>
+              <td>{{areaLabel}}</td>
             </tr>
           {{/each}}
         {{/if}}

@@ -24,11 +24,11 @@ function shuffle<T>(arr: T[]): T[] {
 
 export async function previewPopulate(scene: any, placements: any[], selectedCells: Array<{ x: number; y: number }>): Promise<string[]> {
   const warnings: string[] = [];
-  const unresolved = [];
+  const unresolved: string[] = [];
   let total = 0;
   for (const p of placements) {
     const res = await resolveMonster(p.monster);
-    if (res.status !== "resolved") unresolved.push(p.monster.name);
+    if (res.status !== "resolved") unresolved.push(p.areaRef ? `${p.monster.name} [${p.areaRef}]` : p.monster.name);
     total += p.quantity;
   }
   const max = Number(game.settings.get(MODULE_ID, SETTINGS_KEYS.maxTokens));
@@ -62,7 +62,8 @@ export async function populateScene(scene: any, placements: any[], selectedCells
     const available = allowStacking ? randomized : randomized.slice(0, placement.quantity);
 
     if (!allowStacking && placement.quantity > available.length) {
-      throw new Error(`Not enough cells for placement ${placement.monster.name}.`);
+      const areaSuffix = placement.areaRef ? ` [${placement.areaRef}]` : "";
+      throw new Error(`Not enough cells for placement ${placement.monster.name}${areaSuffix}.`);
     }
 
     for (let i = 0; i < placement.quantity; i++) {
@@ -90,7 +91,9 @@ export async function populateScene(scene: any, placements: any[], selectedCells
   }
 
   if (!docs.length) {
-    ui.notifications.warn("Keine spawnbaren Tokens gefunden.");
+    const areaRefs = placements.map((placement) => placement.areaRef).filter((ref): ref is string => typeof ref === "string" && ref.length > 0);
+    const suffix = areaRefs.length ? ` Betroffene Bereiche: ${areaRefs.join(", ")}.` : "";
+    ui.notifications.warn(`Keine spawnbaren Tokens gefunden.${suffix}`);
     return;
   }
 
