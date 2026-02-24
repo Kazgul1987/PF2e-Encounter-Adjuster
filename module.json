@@ -1,0 +1,40 @@
+{
+  "id": "pf2e-encounter-adjuster",
+  "title": "PF2e Encounter Adjuster",
+  "description": "Importiert externe Encounter-JSON-Datensätze und spawnt angepasste Tokens in Szenen.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "authors": [
+    {
+      "name": "Codex"
+    }
+  ],
+  "esmodules": [
+    "dist/main.js"
+  ],
+  "styles": [
+    "styles/module.css"
+  ],
+  "languages": [
+    {
+      "lang": "de",
+      "name": "Deutsch",
+      "path": "lang/de.json"
+    }
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "pf2e",
+        "type": "system",
+        "compatibility": {}
+      }
+    ]
+  },
+  "url": "https://example.invalid/pf2e-encounter-adjuster",
+  "manifest": "https://example.invalid/pf2e-encounter-adjuster/module.json",
+  "download": "https://example.invalid/pf2e-encounter-adjuster/module.zip"
+}

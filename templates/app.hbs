@@ -1,0 +1,43 @@
+<section class="pf2e-encounter-adjuster">
+  <div class="toolbar">
+    <label>Szene
+      <select name="scene">
+        {{#each scenes}}
+          <option value="{{idx}}">{{name}}</option>
+        {{/each}}
+      </select>
+    </label>
+    <label>Encounter
+      <select name="encounter">
+        <option value="0">Template 1</option>
+        <option value="1">Template 2</option>
+        <option value="2">Template 3</option>
+      </select>
+    </label>
+    <button type="button" data-action="resolve">Konflikte prüfen</button>
+    <button type="button" data-action="activate-grid">Grid auswählen</button>
+    <button type="button" data-action="clear-grid">Grid löschen</button>
+    <button type="button" data-action="preview">Preview</button>
+    <button type="button" data-action="populate">Populate</button>
+  </div>
+  <p>Aktuell ausgewählte Grid-Squares: <strong>{{selectedCells}}</strong></p>
+  <div class="placements">
+    <table>
+      <thead>
+        <tr><th>Monster</th><th>Menge</th><th>Status</th><th>Area</th></tr>
+      </thead>
+      <tbody>
+        {{#if data.scenes.length}}
+          {{#each data.scenes.[0].encounters.[0].placements}}
+            <tr>
+              <td>{{monster.name}}</td>
+              <td>{{quantity}}</td>
+              <td><span class="status-pill unresolved">Ungeprüft</span></td>
+              <td>{{#if area.rect}}Rect{{else}}Polygon{{/if}}</td>
+            </tr>
+          {{/each}}
+        {{/if}}
+      </tbody>
+    </table>
+  </div>
+</section>
